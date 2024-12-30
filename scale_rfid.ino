@@ -1,85 +1,40 @@
-#include <SPI.h>
-#include <MFRC522.h>
 
-#define RST_PIN         22          // Configurable, see typical pin layout above
-#define SS_PIN          21         // Configurable, see typical pin layout above
-// Assuming SPI(VSPI) pins
-// SCK 18
-// MISO 19 
-// MOSI 23
+#include <Arduino.h>
 
-MFRC522 mfrc522(SS_PIN, RST_PIN);  // Create MFRC522 instance
+#include "rfid.h"
+#include "scale.h"
 
-
-#define MAX_ID_SIZE 10
-
-struct Id
+void print_hex(byte *buffer, byte size)
 {
-  byte bytes[MAX_ID_SIZE];
-  size_t size;
-};
-
-Id id;
-
-void setup() {
-	Serial.begin(9600);		// Initialize serial communications with the PC
-	while (!Serial);		// Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
-	SPI.begin();			// Init SPI bus
-	mfrc522.PCD_Init();		// Init MFRC522
-	delay(4);				// Optional delay. Some board do need more time after init to be ready, see Readme
-	mfrc522.PCD_DumpVersionToSerial();	// Show details of PCD - MFRC522 Card Reader details
-	Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
-}
-
-void loop() {
-	// Reset the loop if no new card present on the sensor/reader. This saves the entire process when idle.
-	if (!mfrc522.PICC_IsNewCardPresent()) {
-		return;
-	}
-
-	// Select one of the cards
-	if (!mfrc522.PICC_ReadCardSerial()) {
-		return;
-	}
-
-  Serial.print(F("PICC type: "));
-  MFRC522::PICC_Type piccType = mfrc522.PICC_GetType(mfrc522.uid.sak);
-  Serial.println(mfrc522.PICC_GetTypeName(piccType));
-
-  memcpy(id.bytes, mfrc522.uid.uidByte, mfrc522.uid.size);
-  id.size = mfrc522.uid.size;
-
-  Serial.println(F("The tag ID is:"));
-  Serial.print(F("In hex: "));
-  printHex(id.bytes, id.size);
-  Serial.println();
-  Serial.print(F("In dec: "));
-  printDec(id.bytes, id.size);
-  Serial.println();
-
-  // Halt PICC
-  mfrc522.PICC_HaltA();
-
-  // Stop encryption on PCD
-  mfrc522.PCD_StopCrypto1();
-}
-
-/**
- * Helper routine to dump a byte array as hex values to Serial. 
- */
-void printHex(byte *buffer, byte bufferSize) {
-  for (byte i = 0; i < bufferSize; i++) {
+  for (byte i = 0; i < size; i++) {
     Serial.print(buffer[i] < 0x10 ? " 0" : " ");
     Serial.print(buffer[i], HEX);
   }
 }
 
-/**
- * Helper routine to dump a byte array as dec values to Serial.
- */
-void printDec(byte *buffer, byte bufferSize) {
-  for (byte i = 0; i < bufferSize; i++) {
-    Serial.print(' ');
-    Serial.print(buffer[i], DEC);
+void setup()
+{
+  Serial.begin(115200);
+  scale_setup();
+  rfid_setup();
+}
+
+Id id;
+
+void loop()
+{
+  if(!rfid_get_id(id)) {
+    return;
   }
+
+  Serial.println(F("The tag ID is:"));
+  Serial.print(F("In hex: "));
+  print_hex(id.bytes, id.size);
+  Serial.println();
+
+  const float weight = scale_get_weight();
+  Serial.print("Weight: ");
+  Serial.print(weight);
+  Serial.println(" g");
+  Serial.println();
 }
